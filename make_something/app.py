@@ -25,10 +25,10 @@ def healthz_resource():
 
 @app.route("/kibela", methods=["POST"])
 def kibela_webhook():
-    from chalicelib.parse_kibela import create_post_model_from_kibela
+    from chalicelib.parse_kibela import create_post_body
 
     body = app.current_request.json_body
-    request_body = create_post_model_from_kibela(body)
+    request_body = create_post_body(body)
 
     webhook_url = os.environ.get("WEBHOOK_URL")
     post_content(webhook_url, request_body)
@@ -37,10 +37,10 @@ def kibela_webhook():
 
 @app.route("/backlog", methods=["POST"])
 def backlog_webhook():
-    from chalicelib.parse_backlog import create_post_model_from_backlog
+    from chalicelib.parse_backlog import create_post_body
 
     body = app.current_request.json_body
-    request_body = create_post_model_from_backlog(body)
+    request_body = create_post_body(body)
 
     webhook_url = os.environ.get("WEBHOOK_URL")
     post_content(webhook_url, request_body)
