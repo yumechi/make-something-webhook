@@ -12,6 +12,7 @@ black = "*"
 flake8 = "*"
 pytest = "*"
 pre-commit = "*"
+kamidana = "*"
 
 [requires]
 python_version = "3.8"
