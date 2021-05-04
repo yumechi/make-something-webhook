@@ -1,33 +1,47 @@
 from chalice import Chalice
 import os
 from typing import Dict, Any
-import requests
-from parse_model import parse_backlog_model, parse_kibela_model
 
-app = Chalice(app_name='make_something')
+app = Chalice(app_name="make_something")
 
 def post_content(url: str, body: Dict[str, Any]):
+    import requests
+    import json
+
     headers = {
-        'Content-Type' : 'application/json',
-        'User-Agent': 'Yumechi WebHook/1.0',
+        "Content-Type": "application/json",
+        "User-Agent": "Yumechi WebHook/1.0",
     }
-    requests.post(url, data=body)
+    # NOTE: headerの指定とjson.dumpをかますとembedsのPOSTがうまくいくようになる
+    # refer: https://jibundex.com/python/webhook-python
+    res = requests.post(url, data=json.dumps(body), headers=headers)
+    if res.status_code >= 400:
+        print(f"discord post error: {res.text}")
+
+@app.route("/healthz", methods=["GET"])
+def healthz_resource():
+    return {"status": "ok"}
 
 
-@app.route('/kibela', methods=['POST'])
+@app.route("/kibela", methods=["POST"])
 def kibela_webhook():
+    from chalicelib.parse_kibela import create_post_model_from_kibela
+
     body = app.current_request.json_body
-    request_body = parse_kibela_model(body)
+    request_body = create_post_model_from_kibela(body)
 
-    webhook_url = os.environ.get('WEBHOOK_URL')
+    webhook_url = os.environ.get("WEBHOOK_URL")
     post_content(webhook_url, request_body)
-    return {'mode': 'kibela'}
+    return {"mode": "kibela"}
 
-@app.route('/backlog', methods=['POST'])
+
+@app.route("/backlog", methods=["POST"])
 def backlog_webhook():
-    body = app.current_request.json_body
-    request_body = parse_backlog_model(body)
+    from chalicelib.parse_backlog import create_post_model_from_backlog
 
-    webhook_url = os.environ.get('WEBHOOK_URL')
+    body = app.current_request.json_body
+    request_body = create_post_model_from_backlog(body)
+
+    webhook_url = os.environ.get("WEBHOOK_URL")
     post_content(webhook_url, request_body)
-    return {'mode': 'backlog'}
+    return {"mode": "backlog"}
