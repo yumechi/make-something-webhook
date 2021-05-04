@@ -4,9 +4,17 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-chalice = "*"
+requests = "*"
 
 [dev-packages]
+chalice = "*"
+black = "*"
+flake8 = "*"
+pytest = "*"
+pre-commit = "*"
 
 [requires]
-python_version = "3.9"
+python_version = "3.8"
+
+[pipenv]
+allow_prereleases = true
