@@ -1,11 +1,11 @@
 from chalice import Chalice
 import os
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 app = Chalice(app_name="make_something")
 
 
-def post_content(url: str, req_body: Dict[str, Any]):
+def post_content(url: str, req_body: Dict[str, Any]) -> Optional[str]:
     import requests
     import json
 
@@ -22,6 +22,8 @@ def post_content(url: str, req_body: Dict[str, Any]):
         print(f"req_body={req_body}")
         # TODO: S3に書き出してデバッグ可能にしておく
         print(f"body={body}")
+        return res.text
+    return ""
 
 
 @app.route("/healthz", methods=["GET"])
@@ -36,10 +38,25 @@ def kibela_webhook():
     body = app.current_request.json_body
     request_body = create_post_body(body)
 
+    # テストボディがなぜかaction_type=send, resource=testで来るので、その際はボディができない
+    if not request_body:
+        return {
+            "status": "skip",
+            "reason": "test request",
+        }
+
     webhook_url = os.environ.get("KIBELA_WEBHOOK_URL")
-    post_content(webhook_url, request_body)
-    # TODO: レスポンスもログ出しも雑
-    return {"mode": "kibela"}
+    result = post_content(webhook_url, request_body)
+    if not result:
+        return {
+            "status": "OK",
+            "reason": "",
+        }
+    else:
+        return {
+            "status": "Discord POST Failed.",
+            "reason": result,
+        }
 
 
 @app.route("/backlog", methods=["POST"])
@@ -50,6 +67,15 @@ def backlog_webhook():
     request_body = create_post_body(body)
 
     webhook_url = os.environ.get("BACKLOG_WEBHOOK_URL")
-    post_content(webhook_url, request_body)
-    # TODO: レスポンスもログ出しも雑
-    return {"mode": "backlog"}
+    result = post_content(webhook_url, request_body)
+
+    if not result:
+        return {
+            "status": "OK",
+            "reason": "",
+        }
+    else:
+        return {
+            "status": "Discord POST Failed.",
+            "reason": result,
+        }

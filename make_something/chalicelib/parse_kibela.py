@@ -3,7 +3,7 @@ import os
 from abc import ABC, abstractmethod
 
 
-def create_post_body(data):
+def create_post_body(data) -> Dict[str, Any]:
     """
     kibela用の投稿ボディを作る。
     アクションによって、jsonモデルが大きく異なるので、それっぽい単位でパースする。
@@ -21,6 +21,10 @@ def create_post_body(data):
 
     action_type = data["action"]
     resource = data["resource_type"]
+
+    if (action_type, resource) == ("send", "test"):
+        return {}
+
     mp = {
         "blog": {
             "create": CreateBlog,
