@@ -5,7 +5,7 @@ from typing import Dict, Any
 app = Chalice(app_name="make_something")
 
 
-def post_content(url: str, body: Dict[str, Any]):
+def post_content(url: str, req_body: Dict[str, Any]):
     import requests
     import json
 
@@ -15,9 +15,13 @@ def post_content(url: str, body: Dict[str, Any]):
     }
     # NOTE: headerの指定とjson.dumpをかますとembedsのPOSTがうまくいくようになる
     # refer: https://jibundex.com/python/webhook-python
-    res = requests.post(url, data=json.dumps(body), headers=headers)
+    res = requests.post(url, data=json.dumps(req_body), headers=headers)
     if res.status_code >= 400:
+        body = app.current_request.json_body
         print(f"discord post error: {res.text}")
+        print(f"req_body={req_body}")
+        # TODO: S3に書き出してデバッグ可能にしておく
+        print(f"body={body}")
 
 
 @app.route("/healthz", methods=["GET"])

@@ -199,9 +199,9 @@ class Issue(ParseMixin):
 
         return {
             "issue_type": content.get("issueType", {}).get("name"),
-            "assignee": content.get("assignee") or "未指定",
+            "assignee": content.get("assignee", {}).get("name") or "未指定",
             "priority": content.get("priority", {}).get("name"),
-            "status": content.get("status").get("name"),
+            "status": content.get("status", {}).get("name"),
             "milestone": _parse_some_versions(content, "milestone"),
             "versions": _parse_some_versions(content, "versions"),
             "due_date": content.get("dueDate"),
@@ -329,9 +329,9 @@ class Comment(ParseMixin):
 
         return {
             "issue_type": content.get("issueType", {}).get("name"),
-            "assignee": content.get("assignee") or "未指定",
+            "assignee": content.get("assignee", {}).get("name") or "未指定",
             "priority": content.get("priority", {}).get("name"),
-            "status": content.get("status").get("name"),
+            "status": content.get("status", {}).get("name"),
             "milestone": _parse_some_versions(content, "milestone"),
             "versions": _parse_some_versions(content, "versions"),
             "due_date": content.get("dueDate"),
@@ -357,7 +357,6 @@ class Milestone(ParseMixin):
                 # TODO: エラーログはもう少しまじめに出す。
                 print("idに数値以外が入ってきている")
                 return None
-
 
         base_url = os.environ.get("BACKLOG_BASE_URL")
         project_prefix = os.environ.get("PROJECT_PREFIX")
@@ -405,8 +404,10 @@ class Milestone(ParseMixin):
 class CreateMilestone(Milestone):
     BASE_DESCRITION_MESSAGE = "マイルストーンを作成しました"
 
+
 class UpdateMilestone(Milestone):
     BASE_DESCRITION_MESSAGE = "マイルストーンを更新しました"
+
 
 class DeleteMilestone(Milestone):
     BASE_DESCRITION_MESSAGE = "マイルストーンを削除しました"
