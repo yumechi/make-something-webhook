@@ -1,6 +1,6 @@
 from typing import Dict, List, Any, Optional
 import os
-from abc import ABC, abstractmethod, abstractproperty
+from abc import ABC, abstractmethod
 
 
 def create_post_body(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -27,6 +27,7 @@ def create_post_body(data: Dict[str, Any]) -> Dict[str, Any]:
         22: CreateMilestone,
         23: UpdateMilestone,
         24: DeleteMilestone,
+        14: MultiUpdateIssue,
     }
     cl = mp.get(action_type)
     if not cl:
@@ -45,11 +46,15 @@ class ParseMixin(ABC):
     実質的にself.dataにレスポンスデータが入っていることを前提にしている。
     """
 
-    BASE_DESCRITION_MESSAGE = None
+    BASE_DESCRITION_MESSAGE: Optional[str] = None
 
     def parse(self) -> Dict[str, Any]:
         """
-        フックポイントとなる
+        フックポイントとなるパース処理。
+        ベースとなるものをセットしたうえで、embedsを継承先で実装し、追加できるようにしておく。
+
+        Returns:
+            (Dict[str, Any]): DiscordにPostする実際のBody
         """
 
         # FIXME: ベースとなる文言は環境変数とかからとって変更可能にしておく
@@ -66,6 +71,13 @@ class ParseMixin(ABC):
 
     @property
     def base_description(self) -> str:
+        """
+        embedsの外側に表示されるベースとなるdescritionを返す。
+        BASE_DESCRITION_MESSAGEを継承先で上書きし、それぞれだしたい表示文言に変更する。
+
+        Returns:
+            (str): ベースのdescription
+        """
         return self.BASE_DESCRITION_MESSAGE or "新しい通知です"
 
     @abstractmethod
@@ -74,7 +86,7 @@ class ParseMixin(ABC):
         fieldsをパースして返す。
 
         Returns:
-            (Dict[str, Any]): fieldsのベースとなるデータ
+            (Optional[Dict[str, Any]]): fieldsのベースとなるデータ
         """
         return {}
 
@@ -129,7 +141,7 @@ class Issue(ParseMixin):
     def get_title_url(self) -> str:
         base_url = os.environ.get("BACKLOG_BASE_URL")
         project_prefix = os.environ.get("PROJECT_PREFIX")
-        issue_id = self.data["content"]["id"]
+        issue_id = self.data["content"]["key_id"]
         return f"{base_url}/view/{project_prefix}-{issue_id}"
 
     def get_title(self) -> str:
@@ -139,9 +151,12 @@ class Issue(ParseMixin):
         return self.data["createdUser"].get("name", "名前なし")
 
     def get_description(self) -> str:
-        return self.data["content"].get("description", "説明なし")
+        description = self.data["content"].get("description", "説明なし")
+        if len(description) > 500:
+            description = description[:500] + "（省略されました）"
+        return description
 
-    def _parse(self):
+    def _parse(self) -> Optional[List[Dict[str, Any]]]:
         fields = self.create_fields(self.data)
 
         return [
@@ -187,7 +202,7 @@ class Issue(ParseMixin):
         ]
 
     @staticmethod
-    def create_fields(data):
+    def create_fields(data) -> Dict[str, Any]:
         content = data["content"]
 
         def _parse_some_versions(content_, key):
@@ -197,10 +212,16 @@ class Issue(ParseMixin):
                 return m[0]["name"]
             return None
 
+        def _get_dict(cont, key):
+            elem = cont.get(key, {})
+            if not elem:
+                return {}
+            return elem
+
         return {
-            "issue_type": content.get("issueType", {}).get("name"),
-            "assignee": content.get("assignee", {}).get("name") or "未指定",
-            "priority": content.get("priority", {}).get("name"),
+            "issue_type": _get_dict(content, "issueType").get("name"),
+            "assignee": _get_dict(content, "assignee").get("name") or "未指定",
+            "priority": _get_dict(content, "priority").get("name"),
             "status": content.get("status", {}).get("name"),
             "milestone": _parse_some_versions(content, "milestone"),
             "versions": _parse_some_versions(content, "versions"),
@@ -229,13 +250,13 @@ class DeleteIssue(Issue):
 
     def get_title(self) -> str:
         project_prefix = os.environ.get("PROJECT_PREFIX")
-        issue_id = self.data["content"]["id"]
+        issue_id = self.data["content"]["key_id"]
         return f"{project_prefix}-{issue_id}"
 
     def get_description(self) -> str:
         return ""
 
-    def _parse(self):
+    def _parse(self) -> Optional[List[Dict[str, Any]]]:
         """
         削除時はfieldsとして追加できる情報がないので、空リストを返す。
         """
@@ -258,7 +279,7 @@ class Comment(ParseMixin):
     def get_title_url(self) -> str:
         base_url = os.environ.get("BACKLOG_BASE_URL")
         project_prefix = os.environ.get("PROJECT_PREFIX")
-        issue_id = self.data["content"]["id"]
+        issue_id = self.data["content"]["key_id"]
         return f"{base_url}/view/{project_prefix}-{issue_id}"
 
     def get_title(self) -> str:
@@ -269,9 +290,12 @@ class Comment(ParseMixin):
 
     def get_description(self) -> str:
         content = self.data["content"]
-        return content.get("comment", {}).get("content", "説明なし")
+        description = content.get("comment", {}).get("content", "説明なし")
+        if len(description) > 500:
+            description = description[:500] + "（省略されました）"
+        return description
 
-    def _parse(self):
+    def _parse(self) -> Optional[List[Dict[str, Any]]]:
         fields = self.create_fields(self.data)
 
         return [
@@ -317,7 +341,7 @@ class Comment(ParseMixin):
         ]
 
     @staticmethod
-    def create_fields(data):
+    def create_fields(data) -> Dict[str, Any]:
         content = data["content"]
 
         def _parse_some_versions(content_, key):
@@ -327,10 +351,16 @@ class Comment(ParseMixin):
                 return m[0]["name"]
             return None
 
+        def _get_dict(cont, key):
+            elem = cont.get(key, {})
+            if not elem:
+                return {}
+            return elem
+
         return {
-            "issue_type": content.get("issueType", {}).get("name"),
-            "assignee": content.get("assignee", {}).get("name") or "未指定",
-            "priority": content.get("priority", {}).get("name"),
+            "issue_type": _get_dict(content, "issueType").get("name"),
+            "assignee": _get_dict(content, "assignee").get("name") or "未指定",
+            "priority": _get_dict(content, "priority").get("name"),
             "status": content.get("status", {}).get("name"),
             "milestone": _parse_some_versions(content, "milestone"),
             "versions": _parse_some_versions(content, "versions"),
@@ -381,7 +411,7 @@ class Milestone(ParseMixin):
         # TODO: アップデート時が雑かも
         return self.data["content"].get("description", "説明なし")
 
-    def _parse(self):
+    def _parse(self) -> Optional[List[Dict[str, Any]]]:
         content = self.data
         return [
             e
@@ -411,3 +441,82 @@ class UpdateMilestone(Milestone):
 
 class DeleteMilestone(Milestone):
     BASE_DESCRITION_MESSAGE = "マイルストーンを削除しました"
+
+
+class MultiUpdateIssue(ParseMixin):
+    BASE_DESCRITION_MESSAGE = "課題を複数更新しました"
+
+    def __init__(self, data):
+        self.data = data
+        # 複数更新時に入ってくるコメント
+        self.comment = None
+
+    def get_title_url(self) -> str:
+        """
+        課題の複数更新の場合は、いったんタイトルのリンクはプロジェクトのトップに飛ばす。
+        """
+        base_url = os.environ.get("BACKLOG_BASE_URL")
+        project_prefix = os.environ.get("PROJECT_PREFIX")
+        return f"{base_url}/projects/{project_prefix}"
+
+    def get_title(self) -> str:
+        # description側で作業するので空文字にする
+        return ""
+
+    def get_username(self) -> str:
+        return self.data["createdUser"].get("name", "名前なし")
+
+    def get_description(self) -> str:
+        """
+        更新したissueをリスト形式で出す。
+        TODO: コメントがchangesに入ってこずにissue側に入ってくるのでつらい。インスタンス変数に書いて逃げることにする。
+        """
+
+        def _base_issue_url():
+            base_url = os.environ.get("BACKLOG_BASE_URL")
+            project_prefix = os.environ.get("PROJECT_PREFIX")
+            return f"{base_url}/view/{project_prefix}"
+
+        project_prefix = os.environ.get("PROJECT_PREFIX")
+        link_content = self.data["content"]["link"]
+        issue_url = _base_issue_url()
+        msg_list = []
+        for d in link_content:
+            issue_id = d["key_id"]
+            issue_title = d["title"]
+            comment = d.get("comment", {}).get("content")
+            if comment:
+                self.comment = comment
+            msg = f"[{project_prefix}-{issue_id} {issue_title}]({issue_url}-{issue_id})"
+            msg_list.append(msg)
+        return "\n".join(msg_list) or "内容無し"
+
+    def _parse(self) -> Optional[List[Dict[str, Any]]]:
+        fields = []
+        if self.comment:
+            comment = self.comment
+            if len(comment) > 300:
+                comment = comment[:300] + "（省略されました）"
+            fields.append(
+                {
+                    "name": "コメント",
+                    "value": comment,
+                    "inline": True,
+                }
+            )
+
+        changes = self.data["content"]["changes"]
+        if changes:
+            for d in changes:
+                # TODO: 名称に追従するのは疲れるのでいったんkey名で…
+                name = d["field"]
+                value = d.get("new_value", "変更有")
+                fields.append(
+                    {
+                        "name": name,
+                        "value": value,
+                        "inline": True,
+                    }
+                )
+
+        return fields
