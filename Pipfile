@@ -5,9 +5,9 @@ name = "pypi"
 
 [packages]
 requests = "*"
+chalice = "*"
 
 [dev-packages]
-chalice = "*"
 black = "*"
 flake8 = "*"
 pytest = "*"
