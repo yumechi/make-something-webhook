@@ -23,6 +23,7 @@ def create_post_body(data: Dict[str, Any]) -> Dict[str, Any]:
         1: Issue,
         2: Issue,
         4: DeleteIssue,
+        3: Comment,
     }
     cl = mp.get(action_type)
     if not cl:
@@ -215,3 +216,97 @@ class DeleteIssue(Issue):
         削除時はfieldsとして追加できる情報がないので、空リストを返す。
         """
         return []
+
+
+class Comment(ParseMixin):
+    """
+    コメント用のクラス。
+    大体Issueと同じ実装になってしまったが、いったんこのままにしておく。
+
+    descriptionはコメントをアップデートしておく。
+    """
+
+    def __init__(self, data):
+        self.data = data
+
+    def get_title_url(self) -> str:
+        base_url = os.environ.get("BACKLOG_BASE_URL")
+        project_prefix = os.environ.get("PROJECT_PREFIX")
+        issue_id = self.data["content"]["id"]
+        return f"{base_url}/view/{project_prefix}-{issue_id}"
+
+    def get_title(self) -> str:
+        return self.data["content"].get("summary", "タイトルなし")
+
+    def get_username(self) -> str:
+        return self.data["createdUser"].get("name", "名前なし")
+
+    def get_description(self) -> str:
+        content = self.data["content"]
+        return content.get("comment", {}).get("content", "説明なし")
+
+    def _parse(self):
+        fields = self.create_fields(self.data)
+
+        return [
+            e
+            for e in [
+                {
+                    "name": "種別",
+                    "value": fields.get("issue_type"),
+                    "inline": True,
+                },
+                {
+                    "name": "担当者",
+                    "value": fields.get("assignee"),
+                    "inline": True,
+                },
+                {
+                    "name": "優先度",
+                    "value": fields.get("priority"),
+                    "inline": True,
+                },
+                {
+                    "name": "ステータス",
+                    "value": fields.get("status"),
+                    "inline": True,
+                },
+                {
+                    "name": "マイルストーン",
+                    "value": fields.get("milestone"),
+                    "inline": True,
+                },
+                {
+                    "name": "発生バージョン",
+                    "value": fields.get("versions"),
+                    "inline": True,
+                },
+                {
+                    "name": "期限日",
+                    "value": fields.get("due_date"),
+                    "inline": True,
+                },
+            ]
+            if e.get("value")
+        ]
+
+    @staticmethod
+    def create_fields(data):
+        content = data["content"]
+
+        def _parse_some_versions(content_, key):
+            m = content_[key]
+            if m:
+                # 1番目決め打ち
+                return m[0]["name"]
+            return None
+
+        return {
+            "issue_type": content.get("issueType", {}).get("name"),
+            "assignee": content.get("assignee") or "未指定",
+            "priority": content.get("priority", {}).get("name"),
+            "status": content.get("status").get("name"),
+            "milestone": _parse_some_versions(content, "milestone"),
+            "versions": _parse_some_versions(content, "versions"),
+            "due_date": content.get("dueDate"),
+        }
