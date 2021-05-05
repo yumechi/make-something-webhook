@@ -1,5 +1,6 @@
 {
-  "DISCORD_DEV_WEBHOOK_URL": "https://example.com",
+  "DISCORD_DEV_BACKLOG_WEBHOOK_URL": "https://example.com",
+  "DISCORD_DEV_DISCORD_WEBHOOK_URL": "https://example.com",
   "BACKLOG_BASE_URL": "https://example.com",
   "PROJECT_PREFIX": "A"
 }

@@ -36,8 +36,9 @@ def kibela_webhook():
     body = app.current_request.json_body
     request_body = create_post_body(body)
 
-    webhook_url = os.environ.get("WEBHOOK_URL")
+    webhook_url = os.environ.get("KIBELA_WEBHOOK_URL")
     post_content(webhook_url, request_body)
+    # TODO: レスポンスもログ出しも雑
     return {"mode": "kibela"}
 
 
@@ -48,6 +49,7 @@ def backlog_webhook():
     body = app.current_request.json_body
     request_body = create_post_body(body)
 
-    webhook_url = os.environ.get("WEBHOOK_URL")
+    webhook_url = os.environ.get("BACKLOG_WEBHOOK_URL")
     post_content(webhook_url, request_body)
+    # TODO: レスポンスもログ出しも雑
     return {"mode": "backlog"}

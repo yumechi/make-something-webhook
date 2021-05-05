@@ -1,13 +1,215 @@
+from typing import Dict, List, Any, Optional
 import os
+from abc import ABC, abstractmethod
 
 
 def create_post_body(data):
-    # TODO: mock
-    return {
-        "username": "uchia",
-        "content": "きべらぁあああああああ",
+    """
+    kibela用の投稿ボディを作る。
+    アクションによって、jsonモデルが大きく異なるので、それっぽい単位でパースする。
+
+    未対応のtypeの場合はValueErrorを返す。
+    kibelaの場合はresource_typeとactionのペアで決まる。
+    https://support.kibe.la/hc/ja/articles/360035043592-Outgoing-Webhook%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6
+
+    Args:
+        data (Dict[str, Any]): リクエストデータ
+
+    Returns:
+        Dict[str, Any]: リクエスト用ボディ
+    """
+
+    action_type = data["action"]
+    resource = data["resource_type"]
+    mp = {
+        "blog": {
+            "create": CreateBlog,
+            "update": UpdateBlog,
+            "delete": DeleteBlog,
+        },
+        "wiki": {
+            "create": None,
+            "update": None,
+            "delete": None,
+        },
+        "comment": {
+            "create": None,
+            "update": None,
+            "delete": None,
+        },
+        "comment_reply": {
+            "create": None,
+            "update": None,
+            "delete": None,
+        },
     }
+    cl = mp.get(resource, {}).get(action_type, {})
+    if not cl:
+        msg = f"Unknown type: action_type={action_type}, resource={resource}"
+        print(msg)
+        raise ValueError(msg)
+    return cl(data).parse()
 
 
-def parse_kibela_model(data):
-    return
+class ParseMixin(ABC):
+    """
+    Backlog用の投稿ボディベースを司るMixin。
+    いろいろインターフェース的に使うものを定義する。
+
+    ベースとなるものは雑にこっちで作って、詳細は _parse の実装に任せる。
+    実質的にself.dataにレスポンスデータが入っていることを前提にしている。
+    """
+
+    BASE_DESCRITION_MESSAGE: Optional[str] = None
+
+    def parse(self) -> Dict[str, Any]:
+        """
+        フックポイントとなるパース処理。
+        ベースとなるものをセットしたうえで、embedsを継承先で実装し、追加できるようにしておく。
+
+        Returns:
+            (Dict[str, Any]): DiscordにPostする実際のBody
+        """
+
+        # FIXME: ベースとなる文言は環境変数とかからとって変更可能にしておく
+        base = {
+            "username": "u-na",
+            "content": self.base_description,
+        }
+        base.update(self.create_embeds())
+        fields = self._parse()
+
+        if fields:
+            base["embeds"][0]["fields"] = fields
+        return base
+
+    @property
+    def base_description(self) -> str:
+        """
+        embedsの外側に表示されるベースとなるdescritionを返す。
+        BASE_DESCRITION_MESSAGEを継承先で上書きし、それぞれだしたい表示文言に変更する。
+
+        Returns:
+            (str): ベースのdescription
+        """
+        return self.BASE_DESCRITION_MESSAGE or "新しい通知です"
+
+    @abstractmethod
+    def _parse(self) -> Optional[List[Dict[str, Any]]]:
+        """
+        fieldsをパースして返す。
+
+        Returns:
+            (Optional[Dict[str, Any]]): fieldsのベースとなるデータ
+        """
+        return {}
+
+    @abstractmethod
+    def get_title_url(self) -> str:
+        pass
+
+    @abstractmethod
+    def get_title(self) -> str:
+        pass
+
+    @abstractmethod
+    def get_username(self) -> str:
+        pass
+
+    @abstractmethod
+    def get_description(self) -> str:
+        pass
+
+    def create_embeds(self) -> Dict[str, Any]:
+        """
+        embedsの中身をとりあえず生成する。
+        絶対必須になるものだけを定義しておいて、
+        継承先でフックして定義しなおす。
+
+        Returns:
+            (Dict[str, Any]): ベースとなるembeds
+        """
+        return {
+            "embeds": [
+                {
+                    "author": {
+                        "name": self.get_username(),
+                    },
+                    "title": self.get_title(),
+                    "url": self.get_title_url(),
+                    "description": self.get_description(),
+                }
+            ],
+        }
+
+
+class Blog(ParseMixin):
+    """
+    Blog記事の更新ロジック
+    """
+
+    def __init__(self, data):
+        resource = data["resource_type"]
+        action_user = data["action_user"]
+        self.data = data[resource]
+        self.user = action_user
+
+    def get_title_url(self) -> str:
+        url = self.data["url"] or ""
+        return url
+
+    def get_title(self) -> str:
+        url = self.data["title"] or ""
+        return url
+
+    def get_username(self) -> str:
+        user = self.user["account"]
+        return user
+
+    def _parse(self) -> Optional[List[Dict[str, Any]]]:
+        fields = []
+        data = self.data
+        author = data.get("author")
+        if author:
+            fields.append({
+                "name": "記事の作成者",
+                "value": author.get("account") or "誰か",
+                "inline": True,
+            })
+        extra_fields = self.get_extra_fields()
+        if extra_fields:
+            fields.extend(extra_fields)
+        return fields
+
+    def get_extra_fields(self) -> List[Dict[str, Any]]:
+        """
+        記事情報で他に追加するものがあればここに実装する
+        """
+        return []
+
+
+class CreateBlog(Blog):
+    BASE_DESCRITION_MESSAGE = "記事が作成されました"
+
+    def get_description(self) -> str:
+        content = self.data["content_md"]
+        if len(content) > 500:
+            content = content[:500] + "（省略されました）"
+        return content
+
+
+class UpdateBlog(Blog):
+    BASE_DESCRITION_MESSAGE = "記事が更新されました"
+
+    def get_description(self) -> str:
+        content = self.data["content_diff"]
+        if len(content) > 500:
+            content = content[:500] + "（省略されました）"
+        # diff なので diff 表示に
+        return f"```diff\n{content}\n```"
+
+class DeleteBlog(Blog):
+    BASE_DESCRITION_MESSAGE = "記事が削除されました"
+
+    def get_description(self) -> str:
+        return ""
