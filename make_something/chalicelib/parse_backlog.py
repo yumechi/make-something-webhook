@@ -22,6 +22,7 @@ def create_post_body(data: Dict[str, Any]) -> Dict[str, Any]:
     mp = {
         1: Issue,
         2: Issue,
+        4: DeleteIssue,
     }
     cl = mp.get(action_type)
     if not cl:
@@ -45,7 +46,7 @@ class ParseMixin(ABC):
         フックポイントとなる
         """
 
-        # FIXME: ベースとなる文言は
+        # FIXME: ベースとなる文言は環境変数とかからとって変更可能にしておく
         base = {
             "username": "uchia",
             "content": "新しい更新通知なのです。",
@@ -190,3 +191,27 @@ class Issue(ParseMixin):
             "versions": _parse_some_versions(content, "versions"),
             "due_date": content.get("dueDate"),
         }
+
+
+class DeleteIssue(Issue):
+    """
+    削除時のIssue用クラス。
+    登録時と入ってくるデータが異なるので、元のIssueクラスを継承して上書きする。
+    """
+
+    def __init__(self, data):
+        self.data = data
+
+    def get_title(self) -> str:
+        project_prefix = os.environ.get("PROJECT_PREFIX")
+        issue_id = self.data["content"]["id"]
+        return f"課題を削除しました: {project_prefix}-{issue_id}"
+
+    def get_description(self) -> str:
+        return ""
+
+    def _parse(self):
+        """
+        削除時はfieldsとして追加できる情報がないので、空リストを返す。
+        """
+        return []
