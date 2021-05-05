@@ -39,11 +39,24 @@ Backlog, kibelaの通知をDiscordに流そうというチャレンジ。
 
 ### Kibela
 
-TBD
+| resource_type | action | action                         | status | priority |
+| ------------- | ------ | ------------------------------ | ------ | -------- |
+| blog          | create | 共同編集が「無効」な記事の投稿 | 〇     | medium   |
+| blog          | update | 共同編集が「無効」な記事の更新 | 〇     | medium   |
+| blog          | delete | 共同編集が「無効」な記事の削除 | 〇     | medium   |
+| wiki          | create | 共同編集が「有効」な記事の投稿 | 〇     | medium   |
+| wiki          | update | 共同編集が「有効」な記事の更新 | 〇     | medium   |
+| wiki          | delete | 共同編集が「有効」な記事の削除 | 〇     | medium   |
+| comment       | create | コメントの投稿                 | 〇     | medium   |
+| comment       | update | コメントの更新                 | 〇     | medium   |
+| comment       | delete | コメントの削除                 | 〇     | medium   |
+| comment_reply | create | コメント返信の投稿             | 〇     | medium   |
+| comment_reply | update | コメント返信の更新             | 〇     | medium   |
+| comment_reply | delete | コメント返信の削除             | 〇     | medium   |
+| send          | test   | テスト                         | 〇     | high     |
 
 ## TODO
 
-* [ ] kibela側の実装
 * [ ] テストを書く
 * [ ] リトライを楽にする仕組み（S3にボディ書き出すとか）
 * [ ] エラーパターンをもう少し真面目に
