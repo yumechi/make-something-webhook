@@ -4,6 +4,7 @@ from typing import Dict, Any
 
 app = Chalice(app_name="make_something")
 
+
 def post_content(url: str, body: Dict[str, Any]):
     import requests
     import json
@@ -17,6 +18,7 @@ def post_content(url: str, body: Dict[str, Any]):
     res = requests.post(url, data=json.dumps(body), headers=headers)
     if res.status_code >= 400:
         print(f"discord post error: {res.text}")
+
 
 @app.route("/healthz", methods=["GET"])
 def healthz_resource():
