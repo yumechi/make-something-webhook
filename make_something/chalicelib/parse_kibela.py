@@ -28,9 +28,9 @@ def create_post_body(data):
             "delete": DeleteBlog,
         },
         "wiki": {
-            "create": None,
-            "update": None,
-            "delete": None,
+            "create": CreateWiki,
+            "update": UpdateWiki,
+            "delete": DeleteWiki,
         },
         "comment": {
             "create": None,
@@ -143,9 +143,9 @@ class ParseMixin(ABC):
         }
 
 
-class Blog(ParseMixin):
+class Article(ParseMixin):
     """
-    Blog記事の更新ロジック
+    Blog, Wikiの共通ロジック
     """
 
     def __init__(self, data):
@@ -166,16 +166,41 @@ class Blog(ParseMixin):
         user = self.user["account"]
         return user
 
+    @staticmethod
+    def get_author(content: Dict[str, Any]) -> Optional[str]:
+        """
+        公式ドキュメントを見ていると author と authors の両方が入る可能性がある。
+        よって両対応にするため、吸収する。
+
+        Returns:
+            (Optional[str]): 記事の編集者
+        """
+        if "author" in content:
+            author = content.get("author")
+            return author.get("account")
+        if "authors" in content:
+            authors = content.get("authors")
+            return ", ".join([author.get("account") for author in authors])
+        return ""
+
+
+class Blog(Article):
+    """
+    Blog用のパースロジック
+    """
+
     def _parse(self) -> Optional[List[Dict[str, Any]]]:
         fields = []
         data = self.data
-        author = data.get("author")
+        author = self.get_author(data)
         if author:
-            fields.append({
-                "name": "記事の作成者",
-                "value": author.get("account") or "誰か",
-                "inline": True,
-            })
+            fields.append(
+                {
+                    "name": "記事の作成者",
+                    "value": author,
+                    "inline": True,
+                }
+            )
         extra_fields = self.get_extra_fields()
         if extra_fields:
             fields.extend(extra_fields)
@@ -208,7 +233,66 @@ class UpdateBlog(Blog):
         # diff なので diff 表示に
         return f"```diff\n{content}\n```"
 
+
 class DeleteBlog(Blog):
+    BASE_DESCRITION_MESSAGE = "記事が削除されました"
+
+    def get_description(self) -> str:
+        return ""
+
+
+class Wiki(Article):
+    """
+    Wiki用のパースロジック
+    """
+
+    def _parse(self) -> Optional[List[Dict[str, Any]]]:
+        fields = []
+        data = self.data
+        author = self.get_author(data)
+
+        if author:
+            fields.append(
+                {
+                    "name": "記事の作成者",
+                    "value": author,
+                    "inline": True,
+                }
+            )
+        extra_fields = self.get_extra_fields()
+        if extra_fields:
+            fields.extend(extra_fields)
+        return fields
+
+    def get_extra_fields(self) -> List[Dict[str, Any]]:
+        """
+        記事情報で他に追加するものがあればここに実装する
+        """
+        return []
+
+
+class CreateWiki(Wiki):
+    BASE_DESCRITION_MESSAGE = "記事が作成されました"
+
+    def get_description(self) -> str:
+        content = self.data["content_md"]
+        if len(content) > 500:
+            content = content[:500] + "（省略されました）"
+        return content
+
+
+class UpdateWiki(Wiki):
+    BASE_DESCRITION_MESSAGE = "記事が更新されました"
+
+    def get_description(self) -> str:
+        content = self.data["content_diff"]
+        if len(content) > 500:
+            content = content[:500] + "（省略されました）"
+        # diff なので diff 表示に
+        return f"```diff\n{content}\n```"
+
+
+class DeleteWiki(Wiki):
     BASE_DESCRITION_MESSAGE = "記事が削除されました"
 
     def get_description(self) -> str:
