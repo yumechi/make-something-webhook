@@ -1,6 +1,6 @@
 from typing import Dict, List, Any, Optional
 import os
-from abc import ABC, abstractmethod
+from abc import ABC, abstractmethod, abstractproperty
 
 
 def create_post_body(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -20,10 +20,13 @@ def create_post_body(data: Dict[str, Any]) -> Dict[str, Any]:
 
     action_type = data["type"]
     mp = {
-        1: Issue,
-        2: Issue,
+        1: CreateIssue,
+        2: UpdateIssue,
         4: DeleteIssue,
         3: Comment,
+        22: CreateMilestone,
+        23: UpdateMilestone,
+        24: DeleteMilestone,
     }
     cl = mp.get(action_type)
     if not cl:
@@ -42,6 +45,8 @@ class ParseMixin(ABC):
     実質的にself.dataにレスポンスデータが入っていることを前提にしている。
     """
 
+    BASE_DESCRITION_MESSAGE = None
+
     def parse(self) -> Dict[str, Any]:
         """
         フックポイントとなる
@@ -50,7 +55,7 @@ class ParseMixin(ABC):
         # FIXME: ベースとなる文言は環境変数とかからとって変更可能にしておく
         base = {
             "username": "uchia",
-            "content": "新しい更新通知なのです。",
+            "content": self.base_description,
         }
         base.update(self.create_embeds())
         fields = self._parse()
@@ -58,6 +63,10 @@ class ParseMixin(ABC):
         if fields:
             base["embeds"][0]["fields"] = fields
         return base
+
+    @property
+    def base_description(self) -> str:
+        return self.BASE_DESCRITION_MESSAGE or "新しい通知です"
 
     @abstractmethod
     def _parse(self) -> Optional[List[Dict[str, Any]]]:
@@ -109,6 +118,11 @@ class ParseMixin(ABC):
 
 
 class Issue(ParseMixin):
+    """
+    issueのベースとなるクラス。
+    Create, Updateは基本的にこっちだけ使う。
+    """
+
     def __init__(self, data):
         self.data = data
 
@@ -194,11 +208,21 @@ class Issue(ParseMixin):
         }
 
 
+class CreateIssue(Issue):
+    BASE_DESCRITION_MESSAGE = "課題を作成しました"
+
+
+class UpdateIssue(Issue):
+    BASE_DESCRITION_MESSAGE = "課題を更新しました"
+
+
 class DeleteIssue(Issue):
     """
     削除時のIssue用クラス。
     登録時と入ってくるデータが異なるので、元のIssueクラスを継承して上書きする。
     """
+
+    BASE_DESCRITION_MESSAGE = "課題を削除しました"
 
     def __init__(self, data):
         self.data = data
@@ -206,7 +230,7 @@ class DeleteIssue(Issue):
     def get_title(self) -> str:
         project_prefix = os.environ.get("PROJECT_PREFIX")
         issue_id = self.data["content"]["id"]
-        return f"課題を削除しました: {project_prefix}-{issue_id}"
+        return f"{project_prefix}-{issue_id}"
 
     def get_description(self) -> str:
         return ""
@@ -223,8 +247,10 @@ class Comment(ParseMixin):
     コメント用のクラス。
     大体Issueと同じ実装になってしまったが、いったんこのままにしておく。
 
-    descriptionはコメントをアップデートしておく。
+    descriptionはコメントを追加しておく。
     """
+
+    BASE_DESCRITION_MESSAGE = "コメントを追加しました"
 
     def __init__(self, data):
         self.data = data
@@ -310,3 +336,77 @@ class Comment(ParseMixin):
             "versions": _parse_some_versions(content, "versions"),
             "due_date": content.get("dueDate"),
         }
+
+
+class Milestone(ParseMixin):
+    def __init__(self, data):
+        self.data = data
+
+    def get_title_url(self) -> str:
+        """
+        検索画面を返す。
+        {base_url}/find/{project_prefix}??projectId={project_id}&fixedVersionId={version_id}
+        """
+
+        def _int(e):
+            try:
+                return int(e)
+            except ValueError:
+                return None
+            except Exception as e:
+                # TODO: エラーログはもう少しまじめに出す。
+                print("idに数値以外が入ってきている")
+                return None
+
+
+        base_url = os.environ.get("BACKLOG_BASE_URL")
+        project_prefix = os.environ.get("PROJECT_PREFIX")
+
+        project = self.data.get("project", {})
+        content = self.data.get("content", {})
+        project_id = project.get("id", None)
+        milistone_id = content.get("id", None)
+
+        # project_id, milistone_idが取れる場合は検索画面へ飛ばす。そうでない場合はプロジェクトトップへ。
+        if _int(project_id) and _int(milistone_id):
+            return f"{base_url}/find/{project_prefix}?projectId={project_id}&fixedVersionId={milistone_id}"
+        return f"{base_url}/projects/{project_prefix}"
+
+    def get_title(self) -> str:
+        return self.data["content"].get("name", "名称無し")
+
+    def get_username(self) -> str:
+        return self.data["createdUser"].get("name", "名前なし")
+
+    def get_description(self) -> str:
+        # TODO: アップデート時が雑かも
+        return self.data["content"].get("description", "説明なし")
+
+    def _parse(self):
+        content = self.data
+        return [
+            e
+            for e in [
+                {
+                    "name": "開始日",
+                    "value": content.get("start_date"),
+                    "inline": True,
+                },
+                {
+                    "name": "終了日",
+                    "value": content.get("reference_date"),
+                    "inline": True,
+                },
+            ]
+            if e.get("value")
+        ]
+
+
+class CreateMilestone(Milestone):
+    BASE_DESCRITION_MESSAGE = "マイルストーンを作成しました"
+
+class UpdateMilestone(Milestone):
+    BASE_DESCRITION_MESSAGE = "マイルストーンを更新しました"
+
+class DeleteMilestone(Milestone):
+    BASE_DESCRITION_MESSAGE = "マイルストーンを削除しました"
