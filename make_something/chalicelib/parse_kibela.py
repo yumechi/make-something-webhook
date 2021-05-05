@@ -33,14 +33,14 @@ def create_post_body(data):
             "delete": DeleteWiki,
         },
         "comment": {
-            "create": None,
-            "update": None,
-            "delete": None,
+            "create": CreateComment,
+            "update": UpdateComment,
+            "delete": DeleteComment,
         },
         "comment_reply": {
-            "create": None,
-            "update": None,
-            "delete": None,
+            "create": CreateReply,
+            "update": UpdateReply,
+            "delete": DeleteReply,
         },
     }
     cl = mp.get(resource, {}).get(action_type, {})
@@ -294,6 +294,138 @@ class UpdateWiki(Wiki):
 
 class DeleteWiki(Wiki):
     BASE_DESCRITION_MESSAGE = "記事が削除されました"
+
+    def get_description(self) -> str:
+        return ""
+
+
+class CommentBase(ParseMixin):
+    """
+    Cooment, CommentReplyのベースクラス
+    """
+
+    def __init__(self, data):
+        resource = data["resource_type"]
+        action_user = data["action_user"]
+        content = data[resource]
+        if "blog" in content:
+            article = content["blog"]
+        elif "wiki" in content:
+            article = content["wiki"]
+        else:
+            print(f"Can't find article: {resource}={content}")
+            raise ValueError
+        self.data = content
+        self.article = article
+        self.user = action_user
+
+    def get_title_url(self) -> str:
+        url = self.data["url"] or ""
+        return url
+
+    def get_title(self) -> str:
+        # 記事のタイトルはarticle内にある
+        url = self.article["title"] or ""
+        return url
+
+    def get_username(self) -> str:
+        user = self.user["account"]
+        return user
+
+    @staticmethod
+    def get_author(content: Dict[str, Any]) -> Optional[str]:
+        """
+        公式ドキュメントを見ていると author と authors の両方が入る可能性がある。
+        よって両対応にするため、吸収する。
+
+        Returns:
+            (Optional[str]): 記事の編集者
+        """
+        if "author" in content:
+            author = content.get("author")
+            return author.get("account")
+        if "authors" in content:
+            authors = content.get("authors")
+            return ", ".join([author.get("account") for author in authors])
+        return ""
+
+    def _parse(self) -> Optional[List[Dict[str, Any]]]:
+        fields = []
+        article = self.article
+        author = self.get_author(article)
+
+        if author:
+            fields.append(
+                {
+                    "name": "記事の作成者",
+                    "value": author,
+                    "inline": True,
+                }
+            )
+        extra_fields = self.get_extra_fields()
+        if extra_fields:
+            fields.extend(extra_fields)
+        return fields
+
+    def get_extra_fields(self) -> List[Dict[str, Any]]:
+        """
+        記事情報で他に追加するものがあればここに実装する
+        """
+        return []
+
+
+class CreateComment(CommentBase):
+    BASE_DESCRITION_MESSAGE = "コメントが付きました"
+
+    def get_description(self) -> str:
+        content = self.data["content_md"]
+        if len(content) > 500:
+            content = content[:500] + "（省略されました）"
+        return content
+
+
+class UpdateComment(CommentBase):
+    BASE_DESCRITION_MESSAGE = "コメントが更新されました"
+
+    def get_description(self) -> str:
+        content = self.data["content_md"]
+        if len(content) > 500:
+            content = content[:500] + "（省略されました）"
+        # コメントの場合 diff がないのでそのまま
+        return content
+
+
+class DeleteComment(CommentBase):
+    BASE_DESCRITION_MESSAGE = "コメントが削除されました"
+
+    def get_description(self) -> str:
+        return ""
+
+
+class CreateReply(CommentBase):
+    BASE_DESCRITION_MESSAGE = "コメントが付きました"
+
+    def get_description(self) -> str:
+        content = self.data["content_md"]
+        if len(content) > 500:
+            content = content[:500] + "（省略されました）"
+        return content
+
+
+class UpdateReply(CommentBase):
+    BASE_DESCRITION_MESSAGE = "コメントが更新されました"
+
+    def get_description(self) -> str:
+
+        content = self.data["content_md"]
+        if len(content) > 500:
+            content = content[:500] + "（省略されました）"
+        # コメントの場合 diff がないのでそのまま
+        return content
+
+
+class DeleteReply(CommentBase):
+    BASE_DESCRITION_MESSAGE = "コメントが削除されました"
 
     def get_description(self) -> str:
         return ""
