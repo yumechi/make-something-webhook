@@ -39,6 +39,10 @@ Backlog, kibelaの通知をDiscordに流そうというチャレンジ。
 
 ### Kibela
 
+対応しているイベントは下記。 [公式ドキュメント](https://support.kibe.la/hc/ja/articles/360035043592) のresouce_type, actionによって分類している。
+
+実際試してみるとテスト用のサンプルが resouce_type=send, action=test という形で送られてくるので、そちらも対応する。
+
 | resource_type | action | action                         | status | priority |
 | ------------- | ------ | ------------------------------ | ------ | -------- |
 | blog          | create | 共同編集が「無効」な記事の投稿 | 〇     | medium   |
@@ -54,6 +58,42 @@ Backlog, kibelaの通知をDiscordに流そうというチャレンジ。
 | comment_reply | update | コメント返信の更新             | 〇     | medium   |
 | comment_reply | delete | コメント返信の削除             | 〇     | medium   |
 | send          | test   | テスト                         | 〇     | high     |
+
+## ビルド
+### 設計指針とツールの説明
+
+生の .chalice のコンフィグ系のモノは直プッシュしない思考にしている。
+
+これはコードは公開管理したいが、コンフィグ系は不正アクセスを防ぎたいので、あえてこのような形にしている。
+
+環境変数は開発版、本番で2つ設定可能にしておく。
+
+設定可能な値に関しては `make_something/.chalice/config_sample.json` を参照。
+
+ビルド方法は下記。 jinja2 をテンプレとして使っているので、 `kamidana` でコンパイルするような形になっている。
+
+`build_config.sh` に記載されている通りだが、実際に値として使うものは `config_env.json` に書いておく。
+
+### ビルドコマンド
+
+```sh
+pipenv shell
+cd make_something/.chalice/
+./build_shell.sh
+```
+
+## デプロイ
+
+```sh
+cd path/to/make-something-bot/
+
+pipenv shell
+# 認証する。自分の環境では aws-vault を使っている
+aws-vault exec "YOUR_AWS_PROFILE"
+
+cd make_something/
+chalice deploy --stage dev
+```
 
 ## TODO
 
