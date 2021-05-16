@@ -10,6 +10,15 @@
         "BACKLOG_BASE_URL": "{{ BACKLOG_BASE_URL }}",
         "PROJECT_PREFIX": "{{ PROJECT_PREFIX }}"
       }
+    },
+    "production": {
+      "api_gateway_stage": "api",
+      "environment_variables": {
+        "BACKLOG_WEBHOOK_URL": "{{ DISCORD_PRO_BACKLOG_WEBHOOK_URL }}",
+        "KIBELA_WEBHOOK_URL": "{{ DISCORD_PRO_DISCORD_WEBHOOK_URL }}",
+        "BACKLOG_BASE_URL": "{{ BACKLOG_BASE_URL }}",
+        "PROJECT_PREFIX": "{{ PROJECT_PREFIX }}"
+      }
     }
   }
 }

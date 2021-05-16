@@ -59,7 +59,7 @@ class ParseMixin(ABC):
 
         # FIXME: ベースとなる文言は環境変数とかからとって変更可能にしておく
         base = {
-            "username": "uchia",
+            "username": "backlog webhook",
             "content": self.base_description,
         }
         base.update(self.create_embeds())
